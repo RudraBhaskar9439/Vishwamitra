@@ -90,11 +90,17 @@ class VidyaOpenEnvWrapper:
         if vidya_env is None:
             from env.dropout_env import DropoutCommonsEnv
             from env.scenarios.funding_cut import FundingCutScenario
-            
+            from env.scenarios.teacher_shortage import TeacherShortageScenario
+            from env.scenarios.pandemic_recovery import PandemicRecoveryScenario
+            from env.scenarios.conflict_zone import ConflictZoneScenario
+            from env.scenarios.indian_context import IndianContextScenario
+
             scenario_map = {
                 'funding_cut': FundingCutScenario,
-                'teacher_shortage': lambda: None,  # Would import actual scenario
-                'indian_context': lambda: None,
+                'teacher_shortage': TeacherShortageScenario,
+                'pandemic_recovery': PandemicRecoveryScenario,
+                'conflict_zone': ConflictZoneScenario,
+                'indian_context': IndianContextScenario,
             }
             
             scenario_class = scenario_map.get(
@@ -288,7 +294,7 @@ class OpenEnvBatchRunner:
         self, 
         policies: Dict[str, Any],
         n_episodes_per_policy: int = 50
-    ) -> pd.DataFrame:
+    ) -> "pd.DataFrame":
         """
         Compare multiple policies.
         

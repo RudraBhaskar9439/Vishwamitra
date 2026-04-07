@@ -18,7 +18,22 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from env.dropout_env import DropoutCommonsEnv
 from env.scenarios.funding_cut import FundingCutScenario
 from env.scenarios.teacher_shortage import TeacherShortageScenario
+from env.scenarios.pandemic_recovery import PandemicRecoveryScenario
+from env.scenarios.conflict_zone import ConflictZoneScenario
 from training.meta_rl import MetaPolicyNetwork, MAMLTrainer
+
+SCENARIO_MAP = {
+    "funding_crisis": FundingCutScenario,
+    "teacher_shortage": TeacherShortageScenario,
+    "pandemic_recovery": PandemicRecoveryScenario,
+    "conflict_zone": ConflictZoneScenario,
+}
+
+
+def _build_env(scenario_cfg: dict, n_steps: int) -> DropoutCommonsEnv:
+    """Construct DropoutCommonsEnv from a UI scenario config."""
+    scenario_cls = SCENARIO_MAP.get(scenario_cfg["type"], FundingCutScenario)
+    return DropoutCommonsEnv(scenario=scenario_cls(), episode_length=n_steps)
 
 
 class VIDYADemo:
@@ -109,10 +124,7 @@ class VIDYADemo:
         
         try:
             # Create environment
-            env = DropoutCommonsEnv(
-                episode_length=n_steps,
-                **self.current_scenario['params']
-            )
+            env = _build_env(self.current_scenario, n_steps)
             
             obs, info = env.reset()
             
@@ -371,7 +383,7 @@ class VIDYADemo:
     
     def _quick_simulation(self, use_model: bool, n_steps: int) -> Dict:
         """Quick simulation for comparison."""
-        env = DropoutCommonsEnv(episode_length=n_steps, **self.current_scenario['params'])
+        env = _build_env(self.current_scenario, n_steps)
         obs, _ = env.reset()
         
         enrollment = []

@@ -1,0 +1,89 @@
+name: vidya-dropout-commons
+version: 0.1.0
+description: >
+  VIDYA — Educational system crisis simulator. The agent acts as a meta-policy
+  maker selecting 8 continuous intervention intensities to keep the schooling
+  system healthy under shocks (funding cuts, teacher shortages, pandemic
+  recovery, etc.).
+
+entry_point: env.openenv_compat:VidyaOpenEnvWrapper
+inference_script: inference.py
+
+observation_space:
+  type: Box
+  shape: [13]
+  low: 0.0
+  high: 1.0
+  dtype: float32
+  fields:
+    - enrollment_rate
+    - attendance_rate
+    - dropout_rate
+    - teacher_retention
+    - budget_utilization
+    - class_size_norm
+    - teacher_workload
+    - resource_allocation
+    - student_engagement
+    - teacher_burnout
+    - policy_compliance
+    - budget_remaining_norm
+    - step
+
+action_space:
+  type: Box
+  shape: [8]
+  low: 0.0
+  high: 1.0
+  dtype: float32
+  fields:
+    - funding_boost
+    - teacher_incentive
+    - student_scholarship
+    - attendance_mandate
+    - resource_realloc
+    - transparency_report
+    - staff_hiring
+    - counseling_programs
+
+reward:
+  type: dense
+  description: >
+    Dense reward combining dropout penalty, teacher retention bonus, student
+    engagement, and intervention cost penalty. Provides partial-progress
+    signal at every step.
+
+tasks:
+  - id: task_easy_funding
+    difficulty: easy
+    scenario: funding_cut
+    episode_length: 40
+    success_threshold: 0.55
+    grader: agent
+    description: Stabilize the system through a moderate funding cut.
+
+  - id: task_medium_teacher_shortage
+    difficulty: medium
+    scenario: teacher_shortage
+    episode_length: 60
+    success_threshold: 0.50
+    grader: agent
+    description: Maintain teacher retention during a staffing crisis.
+
+  - id: task_hard_pandemic
+    difficulty: hard
+    scenario: pandemic_recovery
+    episode_length: 80
+    success_threshold: 0.48
+    grader: agent
+    description: Recover enrollment and engagement after a pandemic shock.
+
+runtime:
+  max_runtime_minutes: 20
+  vcpu: 2
+  memory_gb: 8
+
+env_vars:
+  - API_BASE_URL
+  - MODEL_NAME
+  - HF_TOKEN
