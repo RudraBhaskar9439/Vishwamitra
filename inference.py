@@ -110,9 +110,36 @@ SYSTEM_PROMPT = (
 )
 
 
-def _fallback_action() -> np.ndarray:
-    # Reasonable balanced default if LLM call fails or returns garbage.
-    return np.array([0.5, 0.5, 0.4, 0.3, 0.4, 0.2, 0.3, 0.4], dtype=np.float32)
+def _fallback_action(obs: np.ndarray | None = None) -> np.ndarray:
+    """Budget-aware heuristic policy used when no LLM is available.
+
+    Cheap baseline + reactive boosts when key metrics deteriorate, scaled
+    down as the budget shrinks so the agent doesn't bankrupt the system.
+    """
+    base = np.array(
+        [0.15, 0.15, 0.20, 0.20, 0.15, 0.30, 0.05, 0.20],
+        dtype=np.float32,
+    )
+    if obs is None or len(obs) < 12:
+        return base
+
+    dropout = float(obs[2])
+    teacher_retention = float(obs[3])
+    student_engagement = float(obs[8])
+    budget_norm = float(obs[11])  # budget_remaining / 2_000_000
+
+    # React to crisis signals.
+    if dropout > 0.20:
+        base[2] = min(1.0, base[2] + 0.25)   # student_scholarship
+        base[7] = min(1.0, base[7] + 0.20)   # counseling_programs
+    if teacher_retention < 0.55:
+        base[1] = min(1.0, base[1] + 0.30)   # teacher_incentive
+    if student_engagement < 0.45:
+        base[3] = min(1.0, base[3] + 0.20)   # attendance_mandate
+
+    # Scale everything by remaining budget so we never collapse on cost.
+    scale = float(np.clip(budget_norm * 1.8, 0.15, 1.0))
+    return np.clip(base * scale, 0.0, 1.0).astype(np.float32)
 
 
 def _parse_action(text: str) -> np.ndarray:
@@ -146,7 +173,7 @@ class LLMPolicy:
 
     def act(self, obs: np.ndarray, task: Task) -> np.ndarray:
         if not self.enabled or self.client is None:
-            return _fallback_action()
+            return _fallback_action(obs)
         state_dict = {OBS_LABELS[i]: float(obs[i]) for i in range(len(OBS_LABELS))}
         user_msg = (
             f"Task: {task.description}\n"
@@ -168,7 +195,7 @@ class LLMPolicy:
             return _parse_action(resp.choices[0].message.content or "")
         except Exception as e:
             print(f"[WARN] LLM call failed: {e}", file=sys.stderr)
-            return _fallback_action()
+            return _fallback_action(obs)
 
 
 # ---------------------------------------------------------------------------
