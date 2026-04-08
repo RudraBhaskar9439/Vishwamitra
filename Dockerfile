@@ -17,6 +17,7 @@ COPY . .
 
 EXPOSE 7860
 
-# Default command runs the OpenEnv inference script.
-# Override with `docker run ... python app.py` for the Gradio demo.
-CMD ["python", "inference.py"]
+# Run the OpenEnv FastAPI server (mounts Gradio UI at /ui).
+# To run the headless inference suite instead:
+#   docker run ... python inference.py
+CMD ["uvicorn", "server:api", "--host", "0.0.0.0", "--port", "7860"]

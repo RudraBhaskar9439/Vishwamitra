@@ -3,9 +3,8 @@ title: Vishwamitra — Mechanism Design for Educational Commons
 emoji: 🪔
 colorFrom: yellow
 colorTo: indigo
-sdk: gradio
-sdk_version: 4.0.0
-app_file: app.py
+sdk: docker
+app_port: 7860
 pinned: true
 license: mit
 ---
