@@ -130,31 +130,37 @@ api = FastAPI(
 )
 
 
-@api.get("/")
-def root() -> JSONResponse:
-    return JSONResponse(
-        {
-            "name": "vishwamitra-dropout-commons",
-            "version": "0.1.0",
-            "spec": "openenv",
-            "observation_space": {
-                "type": "Box",
-                "shape": [13],
-                "low": 0.0,
-                "high": 1.0,
-                "dtype": "float32",
-            },
-            "action_space": {
-                "type": "Box",
-                "shape": [8],
-                "low": 0.0,
-                "high": 1.0,
-                "dtype": "float32",
-            },
-            "endpoints": ["/reset", "/step", "/state", "/healthz", "/ui"],
-            "scenarios": list(SCENARIO_MAP.keys()),
-        }
-    )
+_OPENENV_INFO = {
+    "name": "vishwamitra-dropout-commons",
+    "version": "0.1.0",
+    "spec": "openenv",
+    "observation_space": {
+        "type": "Box",
+        "shape": [13],
+        "low": 0.0,
+        "high": 1.0,
+        "dtype": "float32",
+    },
+    "action_space": {
+        "type": "Box",
+        "shape": [8],
+        "low": 0.0,
+        "high": 1.0,
+        "dtype": "float32",
+    },
+    "endpoints": ["/reset", "/step", "/state", "/healthz", "/info"],
+    "scenarios": list(SCENARIO_MAP.keys()),
+}
+
+
+@api.get("/info")
+def info() -> JSONResponse:
+    return JSONResponse(_OPENENV_INFO)
+
+
+@api.get("/openenv")
+def openenv_alias() -> JSONResponse:
+    return JSONResponse(_OPENENV_INFO)
 
 
 @api.get("/healthz")
@@ -222,7 +228,11 @@ try:
     import gradio as gr  # type: ignore
     import app as _vish_app  # noqa: E402
     _gradio_demo = _vish_app.create_spaces_demo()
-    api = gr.mount_gradio_app(api, _gradio_demo, path="/ui")
+    # Mount Gradio at the root path so the Space's default URL shows the
+    # Vishwamitra UI. The explicit FastAPI routes registered above
+    # (/reset, /step, /state, /healthz, /info, /openenv) take precedence
+    # over Gradio's catch-all because FastAPI route order is preserved.
+    api = gr.mount_gradio_app(api, _gradio_demo, path="/")
 except Exception as _e:  # noqa: BLE001
     print(f"[server] Gradio UI not mounted: {_e}")
 
