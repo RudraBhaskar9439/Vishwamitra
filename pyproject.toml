@@ -60,12 +60,12 @@ Repository = "https://github.com/RudraBhaskar9439/Enigma"
 "Bug Tracker" = "https://github.com/RudraBhaskar9439/Enigma/issues"
 
 [project.scripts]
-server = "server:serve"
+server = "server.app:main"
 inference = "inference:main"
 
 [tool.setuptools]
-py-modules = ["app", "server", "inference", "validate"]
+py-modules = ["app", "inference", "validate"]
 
 [tool.setuptools.packages.find]
-include = ["env*", "agents*", "training*"]
+include = ["env*", "agents*", "training*", "server*"]
 exclude = ["checkpoints*", "logs*", "docs*", "tests*"]

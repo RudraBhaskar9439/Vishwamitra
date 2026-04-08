@@ -37,4 +37,4 @@ COPY --chown=user:user . .
 # defined in server.py — exposes /reset, /step, /state and mounts the
 # Vishwamitra Gradio UI at /ui.
 EXPOSE 7860
-CMD ["sh", "-c", "uvicorn server:api --host 0.0.0.0 --port ${PORT:-7860}"]
+CMD ["sh", "-c", "uvicorn server.app:api --host 0.0.0.0 --port ${PORT:-7860}"]
