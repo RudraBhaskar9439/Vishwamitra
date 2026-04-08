@@ -8,9 +8,18 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import torch
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Tuple
 import sys
 import os
+import json
+import re
+import datetime as _dt
+
+try:
+    from dotenv import load_dotenv  # type: ignore
+    load_dotenv()
+except Exception:
+    pass
 
 # Add parent to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -55,6 +64,212 @@ def _build_env(scenario_cfg: dict, n_steps: int) -> DropoutCommonsEnv:
     """Construct DropoutCommonsEnv from a UI scenario config."""
     scenario_cls = scenario_cfg.get("class", FundingCutScenario)
     return DropoutCommonsEnv(scenario=scenario_cls(), episode_length=n_steps)
+
+
+# ---------------------------------------------------------------------------
+# LLM advisory layer (multi-perspective agent reasoning)
+# ---------------------------------------------------------------------------
+
+OBS_FIELDS = [
+    ("enrollment_rate", "Enrollment Rate"),
+    ("attendance_rate", "Attendance Rate"),
+    ("dropout_rate", "Dropout Rate"),
+    ("teacher_retention", "Teacher Retention"),
+    ("budget_utilization", "Budget Utilization"),
+    ("class_size_norm", "Class Size (norm.)"),
+    ("teacher_workload", "Teacher Workload"),
+    ("resource_allocation", "Resource Allocation"),
+    ("student_engagement", "Student Engagement"),
+    ("teacher_burnout", "Teacher Burnout"),
+    ("policy_compliance", "Policy Compliance"),
+    ("budget_remaining_norm", "Budget Remaining"),
+    ("step", "Time Step"),
+]
+
+AGENT_PERSONAS = {
+    "Student": (
+        "You are a 14-year-old student in this school. You speak from the lived "
+        "experience of attending class day to day, dealing with peers, family "
+        "pressures, and your own motivation. You care about whether you can stay "
+        "in school and learn something useful."
+    ),
+    "Teacher": (
+        "You are a senior classroom teacher with 12 years of experience. You "
+        "speak from the perspective of someone managing 40+ students, drowning in "
+        "paperwork, watching colleagues quit, and trying to keep your own passion "
+        "alive. You care about working conditions and pedagogical integrity."
+    ),
+    "Administrator": (
+        "You are the school principal. You answer to the district, parents, and "
+        "your staff simultaneously. You speak from the perspective of someone "
+        "balancing budgets, compliance, and morale. You care about institutional "
+        "survival and reputation."
+    ),
+    "Policymaker": (
+        "You are a state-level education policymaker. You think in terms of "
+        "systems, equity across schools, political constraints, and 5-year "
+        "outcomes. You speak from the perspective of someone who must justify "
+        "interventions to ministers and the public."
+    ),
+}
+
+FEEDBACK_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "feedback.jsonl")
+
+
+def _llm_client():
+    """Return an OpenAI-compatible client if env vars are set, else None."""
+    base = os.environ.get("API_BASE_URL", "")
+    model = os.environ.get("MODEL_NAME", "")
+    token = os.environ.get("HF_TOKEN", "")
+    if not (base and model and token):
+        return None, None
+    try:
+        from openai import OpenAI  # type: ignore
+        return OpenAI(base_url=base, api_key=token), model
+    except Exception:
+        return None, None
+
+
+def _llm_chat(messages: List[Dict], temperature: float = 0.6, max_tokens: int = 500) -> Optional[str]:
+    client, model = _llm_client()
+    if client is None:
+        return None
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=30,
+        )
+        return resp.choices[0].message.content or ""
+    except Exception as e:
+        return f"[LLM error: {e}]"
+
+
+def get_agent_response(role: str, crisis_text: str, difficulty: str) -> str:
+    """Ask one agent persona how they read the crisis."""
+    persona = AGENT_PERSONAS.get(role, "")
+    sys_msg = (
+        persona + " Respond in 4–6 sentences. Be concrete and grounded. "
+        "Avoid platitudes. Speak in first person."
+    )
+    user_msg = (
+        f"A crisis is unfolding in your school: \"{crisis_text}\".\n"
+        f"Severity: {difficulty}.\n"
+        "What is your honest read of what is happening, and what would you "
+        "personally do in the next two weeks?"
+    )
+    out = _llm_chat(
+        [{"role": "system", "content": sys_msg}, {"role": "user", "content": user_msg}],
+        temperature=0.7,
+        max_tokens=350,
+    )
+    return out or f"[{role} unavailable — set API_BASE_URL/MODEL_NAME/HF_TOKEN to enable]"
+
+
+def get_final_verdict(crisis_text: str, agent_responses: Dict[str, str], difficulty: str) -> str:
+    """Synthesize a mechanism-design verdict from all agent perspectives."""
+    if not agent_responses:
+        return "No agents selected. Pick at least one stakeholder above."
+    transcript = "\n\n".join(f"## {r}\n{t}" for r, t in agent_responses.items())
+    sys_msg = (
+        "You are Vishwamitra — an AI mechanism designer. You read the perspectives "
+        "of multiple stakeholders in an educational system and propose a concrete, "
+        "deployable intervention bundle. You think in terms of game theory, "
+        "incentive structures, and the Tragedy of the Commons. You DO NOT pick "
+        "winners; you redesign the rules so cooperation becomes dominant for all."
+    )
+    user_msg = (
+        f"Crisis: \"{crisis_text}\" (severity: {difficulty})\n\n"
+        f"Stakeholder transcripts:\n\n{transcript}\n\n"
+        "Now produce a FINAL VERDICT in this exact structure:\n"
+        "**Diagnosis:** (2 sentences naming the underlying coordination failure)\n"
+        "**Intervention Bundle:** (3–5 bullet points, each one specific and timed)\n"
+        "**Why this shifts the equilibrium:** (2–3 sentences in game-theory terms)\n"
+        "**First action this week:** (one concrete sentence)"
+    )
+    out = _llm_chat(
+        [{"role": "system", "content": sys_msg}, {"role": "user", "content": user_msg}],
+        temperature=0.5,
+        max_tokens=700,
+    )
+    return out or "[verdict unavailable — set API credentials]"
+
+
+def get_dynamic_plot_config(crisis_text: str) -> List[Tuple[int, str]]:
+    """Ask the LLM which 4 of the 13 obs metrics best illustrate this crisis,
+    and what to title each chart. Returns list of (obs_index, title)."""
+    options = "\n".join(
+        f"{i}: {field[1]} ({field[0]})" for i, field in enumerate(OBS_FIELDS)
+    )
+    sys_msg = (
+        "You are a data visualization curator. Given a crisis description, you "
+        "pick the FOUR most relevant metrics to chart and give each chart a "
+        "specific, vivid title that reflects the crisis being analyzed."
+    )
+    user_msg = (
+        f"Crisis: \"{crisis_text}\"\n\n"
+        f"Available metrics:\n{options}\n\n"
+        "Reply with ONLY a JSON object of this exact form:\n"
+        '{"plots": [{"index": <int>, "title": "<short vivid title>"}, ...]}\n'
+        "Choose exactly 4. Use indices from the list above."
+    )
+    raw = _llm_chat(
+        [{"role": "system", "content": sys_msg}, {"role": "user", "content": user_msg}],
+        temperature=0.4,
+        max_tokens=300,
+    )
+    fallback = [(0, "Enrollment Rate"), (2, "Dropout Rate"),
+                (3, "Teacher Retention"), (8, "Student Engagement")]
+    if not raw:
+        return fallback
+    try:
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if not match:
+            return fallback
+        data = json.loads(match.group(0))
+        plots = data.get("plots", [])
+        result = []
+        for p in plots[:4]:
+            idx = int(p.get("index", 0))
+            title = str(p.get("title", OBS_FIELDS[idx][1]))[:60]
+            if 0 <= idx < len(OBS_FIELDS):
+                result.append((idx, title))
+        return result if len(result) == 4 else fallback
+    except Exception:
+        return fallback
+
+
+def save_feedback(crisis_text: str, verdict: str, rating: int, comment: str) -> str:
+    """Persist user feedback as JSONL — training data for future fine-tuning."""
+    record = {
+        "timestamp": _dt.datetime.utcnow().isoformat() + "Z",
+        "crisis": crisis_text,
+        "verdict": verdict,
+        "rating": int(rating),
+        "comment": comment.strip(),
+    }
+    try:
+        with open(FEEDBACK_PATH, "a") as f:
+            f.write(json.dumps(record) + "\n")
+        return (
+            f"✅ Feedback saved (#{_count_feedback()}).\n"
+            "This becomes part of the training set Vishwamitra uses to refine "
+            "future verdicts. Thank you."
+        )
+    except Exception as e:
+        return f"❌ Could not save feedback: {e}"
+
+
+def _count_feedback() -> int:
+    if not os.path.exists(FEEDBACK_PATH):
+        return 0
+    try:
+        with open(FEEDBACK_PATH) as f:
+            return sum(1 for _ in f)
+    except Exception:
+        return 0
 
 
 class VIDYADemo:
@@ -125,187 +340,176 @@ class VIDYADemo:
     
     def run_simulation(
         self,
+        selected_agents: List[str],
         n_steps: int = 100,
-        use_interventions: bool = True
+        use_interventions: bool = True,
     ) -> tuple:
-        """
-        Run simulation and return results.
-        
+        """Run env + LLM advisory pipeline.
+
         Returns:
-            (status_message, trajectory_plot, metrics_plot, intervention_plot)
+            (perspectives_md, verdict_md, status_md,
+             trajectory_plot, metrics_plot, intervention_plot)
         """
         if self.current_scenario is None:
-            return "❌ Please create a scenario first!", None, None, None
-        
+            return ("❌ Please create a scenario first.", "", "",
+                    None, None, None)
+
         try:
-            # Create environment
+            crisis_text = self.current_scenario.get("label", "")
+            difficulty = self.current_scenario.get("params", {}).get("difficulty", "medium")
+
+            # 1. Run the underlying env to collect a 13-dim trajectory
             env = _build_env(self.current_scenario, n_steps)
-            
-            obs, info = env.reset()
-            
-            # Storage for visualization
-            trajectories = {
-                'enrollment': [],
-                'dropout': [],
-                'teacher_retention': [],
-                'budget': [],
-                'step': []
-            }
-            
-            interventions = {
-                'funding_boost': [],
-                'teacher_incentive': [],
-                'student_scholarship': [],
-                'attendance_mandate': [],
-                'resource_realloc': [],
-                'transparency_report': [],
-                'staff_hiring': [],
-                'counseling_programs': [],
-                'step': []
-            }
-            
-            rewards = []
-            done = False
+            obs, _ = env.reset()
+            obs_history: List[np.ndarray] = []
+            interventions = {label: [] for _, label in OBS_FIELDS[:8]}  # placeholder
+            interv_keys = [
+                "funding_boost", "teacher_incentive", "student_scholarship",
+                "attendance_mandate", "resource_realloc", "transparency_report",
+                "staff_hiring", "counseling_programs",
+            ]
+            interv_track = {k: [] for k in interv_keys}
+            interv_track["step"] = []
+            rewards: List[float] = []
             step = 0
-            
+            done = False
             while not done and step < n_steps:
-                # Get action from model or random
                 if use_interventions and self.current_model is not None:
                     obs_tensor = torch.FloatTensor(obs).unsqueeze(0)
                     with torch.no_grad():
                         action, _ = self.current_model(obs_tensor)
                         action = action.squeeze(0).numpy()
                 else:
-                    # Random baseline
                     action = np.random.uniform(0, 0.3, size=8) if use_interventions else np.zeros(8)
-                
-                # Store intervention levels
-                for i, key in enumerate(interventions.keys()):
-                    if key != 'step':
-                        interventions[key].append(action[i])
-                
-                interventions['step'].append(step)
-                
-                # Step environment
-                next_obs, reward, terminated, truncated, info = env.step(action)
-                done = terminated or truncated
-                
-                # Store metrics
-                state = env.state
-                trajectories['enrollment'].append(state.enrollment_rate * 100)
-                trajectories['dropout'].append(state.dropout_rate * 100)
-                trajectories['teacher_retention'].append(state.teacher_retention * 100)
-                trajectories['budget'].append(state.budget_utilization * 100)
-                trajectories['step'].append(step)
-                
-                rewards.append(reward)
+                for i, k in enumerate(interv_keys):
+                    interv_track[k].append(float(action[i]))
+                interv_track["step"].append(step)
+                next_obs, reward, terminated, truncated, _ = env.step(action)
+                obs_history.append(np.asarray(next_obs, dtype=np.float32))
+                rewards.append(float(reward))
                 obs = next_obs
                 step += 1
-            
-            # Create plots
-            trajectory_plot = self._create_trajectory_plot(trajectories)
-            metrics_plot = self._create_metrics_plot(rewards, trajectories)
-            intervention_plot = self._create_intervention_plot(interventions)
-            
-            # Summary
-            final_enrollment = trajectories['enrollment'][-1]
-            final_dropout = trajectories['dropout'][-1]
-            final_teacher_ret = trajectories['teacher_retention'][-1]
+                done = terminated or truncated
+
+            obs_arr = np.stack(obs_history) if obs_history else np.zeros((1, 13))
+
+            # 2. LLM: agent perspectives
+            perspectives: Dict[str, str] = {}
+            for role in (selected_agents or []):
+                perspectives[role] = get_agent_response(role, crisis_text, difficulty)
+
+            if perspectives:
+                perspectives_md = "## 🗣️ Stakeholder Perspectives\n\n" + "\n\n".join(
+                    f"### {role}\n{text}" for role, text in perspectives.items()
+                )
+            else:
+                perspectives_md = (
+                    "## 🗣️ Stakeholder Perspectives\n\n_No agents selected. "
+                    "Tick at least one stakeholder above to hear their perspective._"
+                )
+
+            # 3. LLM: final verdict
+            verdict_text = get_final_verdict(crisis_text, perspectives, difficulty)
+            verdict_md = "## ⚖️ Vishwamitra's Verdict\n\n" + verdict_text
+            self._last_verdict = verdict_text
+            self._last_crisis = crisis_text
+
+            # 4. LLM: dynamic plot config
+            plot_config = get_dynamic_plot_config(crisis_text)
+            trajectory_plot = self._create_dynamic_trajectory_plot(obs_arr, plot_config)
+            metrics_plot = self._create_metrics_plot(rewards, obs_arr)
+            intervention_plot = self._create_intervention_plot(interv_track)
+
+            # 5. Status
             total_reward = sum(rewards)
-            
-            status = f"""
-✅ Simulation Complete!
+            status_md = (
+                f"### Episode Summary\n"
+                f"- Crisis: **{crisis_text}**\n"
+                f"- Stakeholders consulted: **{', '.join(selected_agents) if selected_agents else 'none'}**\n"
+                f"- Steps simulated: **{step}**\n"
+                f"- Cumulative reward: **{total_reward:+.2f}**\n"
+                f"- Terminated early: **{'yes' if done and step < n_steps else 'no'}**"
+            )
 
-**Final Metrics:**
-- Enrollment Rate: {final_enrollment:.1f}%
-- Dropout Rate: {final_dropout:.1f}%
-- Teacher Retention: {final_teacher_ret:.1f}%
-- Total Reward: {total_reward:.2f}
-- Episodes until collapse/termination: {step}
+            return perspectives_md, verdict_md, status_md, trajectory_plot, metrics_plot, intervention_plot
 
-**Interpretation:**
-{'✅ System maintained stability!' if final_enrollment > 60 else '⚠️  System experienced significant crisis'}
-            """
-            
-            return status, trajectory_plot, metrics_plot, intervention_plot
-            
         except Exception as e:
-            return f"❌ Simulation error: {str(e)}", None, None, None
+            return (f"❌ Simulation error: {e}", "", "", None, None, None)
     
-    def _create_trajectory_plot(self, trajectories: Dict) -> go.Figure:
-        """Create state trajectory visualization."""
+    def _create_dynamic_trajectory_plot(
+        self, obs_arr: np.ndarray, plot_config: List[Tuple[int, str]]
+    ) -> go.Figure:
+        """Plot 4 metrics whose indices and titles were chosen dynamically."""
+        titles = [t for _, t in plot_config]
         fig = make_subplots(
             rows=2, cols=2,
-            subplot_titles=('Enrollment Rate', 'Dropout Rate', 
-                          'Teacher Retention', 'Budget Utilization'),
-            vertical_spacing=0.15
+            subplot_titles=titles,
+            vertical_spacing=0.18,
+            horizontal_spacing=0.12,
         )
-        
-        colors = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B']
-        metrics = ['enrollment', 'dropout', 'teacher_retention', 'budget']
-        
-        positions = [(1,1), (1,2), (2,1), (2,2)]
-        
-        for metric, color, (row, col) in zip(metrics, colors, positions):
+        colors = ['#6ea8ff', '#f87171', '#4ade80', '#f5b942']
+        positions = [(1, 1), (1, 2), (2, 1), (2, 2)]
+        steps = np.arange(obs_arr.shape[0])
+        for (idx, _title), color, (row, col) in zip(plot_config, colors, positions):
+            series = obs_arr[:, idx] if idx < obs_arr.shape[1] else np.zeros_like(steps)
             fig.add_trace(
                 go.Scatter(
-                    x=trajectories['step'],
-                    y=trajectories[metric],
-                    mode='lines',
-                    name=metric.replace('_', ' ').title(),
-                    line=dict(color=color, width=2)
+                    x=steps, y=series, mode='lines',
+                    line=dict(color=color, width=2.5),
+                    fill='tozeroy', fillcolor=color + '22',
                 ),
-                row=row, col=col
+                row=row, col=col,
             )
-            
-            # Add threshold lines
-            if metric == 'enrollment':
-                fig.add_hline(y=70, line_dash="dash", line_color="red", row=row, col=col)
-            elif metric == 'dropout':
-                fig.add_hline(y=25, line_dash="dash", line_color="red", row=row, col=col)
-        
         fig.update_layout(
-            height=500,
-            showlegend=False,
-            title_text="System State Trajectories",
-            template='plotly_white'
+            height=500, showlegend=False,
+            title_text="Dynamic Crisis Trajectories",
+            template='plotly_dark',
+            paper_bgcolor='#0a0e1a',
+            plot_bgcolor='#111827',
+            font=dict(color='#e6edf7', family='Inter'),
         )
-        
         return fig
-    
-    def _create_metrics_plot(self, rewards: list, trajectories: Dict) -> go.Figure:
-        """Create metrics summary plot."""
+
+    def _create_metrics_plot(self, rewards: list, obs_arr: np.ndarray) -> go.Figure:
+        """Reward + composite-health summary."""
         fig = make_subplots(
             rows=1, cols=2,
-            subplot_titles=('Cumulative Reward', 'System Stability')
+            subplot_titles=('Cumulative Reward', 'Composite System Health'),
+            horizontal_spacing=0.12,
         )
-        
-        # Cumulative reward
-        cumsum_rewards = np.cumsum(rewards)
+        cumsum_rewards = np.cumsum(rewards) if len(rewards) else np.array([0.0])
         fig.add_trace(
             go.Scatter(
-                y=cumsum_rewards,
-                mode='lines',
-                name='Cumulative Reward',
-                fill='tozeroy',
-                line=dict(color='#8B5CF6')
+                y=cumsum_rewards, mode='lines',
+                line=dict(color='#f5b942', width=2.5),
+                fill='tozeroy', fillcolor='#f5b94222',
             ),
-            row=1, col=1
+            row=1, col=1,
         )
-        
-        # Stability metric (enrollment - dropout)
-        stability = np.array(trajectories['enrollment']) - np.array(trajectories['dropout'])
+        if obs_arr.size:
+            health = (
+                0.25 * obs_arr[:, 0]   # enrollment
+                + 0.20 * obs_arr[:, 1] # attendance
+                + 0.20 * obs_arr[:, 3] # teacher_retention
+                + 0.15 * obs_arr[:, 8] # student_engagement
+                - 0.30 * obs_arr[:, 2] # dropout
+            )
+        else:
+            health = np.array([0.0])
         fig.add_trace(
             go.Scatter(
-                y=stability,
-                mode='lines',
-                name='Stability (Enroll - Dropout)',
-                line=dict(color='#10B981')
+                y=health, mode='lines',
+                line=dict(color='#6ea8ff', width=2.5),
+                fill='tozeroy', fillcolor='#6ea8ff22',
             ),
-            row=1, col=2
+            row=1, col=2,
         )
-        
-        fig.update_layout(height=300, template='plotly_white')
+        fig.update_layout(
+            height=320, showlegend=False,
+            template='plotly_dark',
+            paper_bgcolor='#0a0e1a', plot_bgcolor='#111827',
+            font=dict(color='#e6edf7', family='Inter'),
+        )
         
         return fig
     
@@ -328,7 +532,9 @@ class VIDYADemo:
             xaxis_title='Time Step',
             yaxis_title='Intervention Type',
             height=400,
-            template='plotly_white'
+            template='plotly_dark',
+            paper_bgcolor='#0a0e1a', plot_bgcolor='#111827',
+            font=dict(color='#e6edf7', family='Inter'),
         )
         
         return fig
@@ -679,19 +885,28 @@ def create_spaces_demo() -> gr.Blocks:
                     enrollment_rate = gr.Slider(50, 100, 85, label="Initial Enrollment (%)")
 
                     create_btn = gr.Button("Create Scenario", variant="secondary")
-                    scenario_status = gr.Textbox(label="Scenario", interactive=False)
+                    scenario_status = gr.Textbox(label="Scenario", interactive=False, lines=3)
 
-                    gr.HTML('<div class="vm-section-h">03 · Run Episode</div>')
+                    gr.HTML('<div class="vm-section-h">03 · Choose Stakeholders</div>')
+                    selected_agents = gr.CheckboxGroup(
+                        choices=["Student", "Teacher", "Administrator", "Policymaker"],
+                        value=["Student", "Teacher", "Administrator", "Policymaker"],
+                        label="Whose perspective should answer this crisis?",
+                    )
+
+                    gr.HTML('<div class="vm-section-h">04 · Run Episode</div>')
                     n_steps = gr.Slider(50, 200, 100, step=10, label="Episode Length")
                     use_interventions = gr.Checkbox(True, label="Enable mechanism-design interventions")
                     run_btn = gr.Button("Run Simulation", variant="primary")
 
                 with gr.Column(scale=2):
-                    sim_status = gr.Textbox(label="Episode Summary", lines=8)
+                    perspectives_md = gr.Markdown("_Run a simulation to hear from your stakeholders._")
+                    verdict_md = gr.Markdown("")
+                    sim_status = gr.Markdown("")
                     with gr.Tabs():
-                        with gr.Tab("System Trajectories"):
+                        with gr.Tab("Crisis Trajectories"):
                             trajectory_plot = gr.Plot()
-                        with gr.Tab("Reward & Stability"):
+                        with gr.Tab("Reward & Health"):
                             metrics_plot = gr.Plot()
                         with gr.Tab("Intervention Heatmap"):
                             intervention_plot = gr.Plot()
@@ -705,6 +920,34 @@ def create_spaces_demo() -> gr.Blocks:
                 with gr.Column(scale=2):
                     compare_status = gr.Textbox(label="Comparison Report", lines=12)
                     compare_plot = gr.Plot()
+
+        with gr.Tab("Feedback"):
+            gr.HTML('<div class="vm-section-h">Train Vishwamitra with your judgement</div>')
+            gr.Markdown(
+                "Every piece of feedback you submit is appended to a structured "
+                "training set. Future fine-tuning runs use these labelled "
+                "(crisis → verdict → rating → comment) tuples to improve which "
+                "intervention bundles Vishwamitra proposes for which crises."
+            )
+            fb_crisis = gr.Textbox(
+                label="Which crisis are you reviewing?",
+                placeholder="Paste or describe the crisis you just ran a simulation on.",
+                lines=2,
+            )
+            fb_verdict = gr.Textbox(
+                label="The verdict Vishwamitra gave",
+                placeholder="Paste the verdict text from the simulator.",
+                lines=4,
+            )
+            fb_rating = gr.Slider(1, 5, value=3, step=1,
+                                  label="Quality of the verdict (1 = useless, 5 = excellent)")
+            fb_comment = gr.Textbox(
+                label="What would you change?",
+                placeholder="Be specific. What did the agent miss? What would you have proposed instead?",
+                lines=4,
+            )
+            fb_submit = gr.Button("Submit Feedback", variant="primary")
+            fb_status = gr.Markdown("")
 
         with gr.Tab("About"):
             gr.HTML(ABOUT_HTML)
@@ -724,8 +967,15 @@ def create_spaces_demo() -> gr.Blocks:
         
         run_btn.click(
             fn=demo.run_simulation,
-            inputs=[n_steps, use_interventions],
-            outputs=[sim_status, trajectory_plot, metrics_plot, intervention_plot]
+            inputs=[selected_agents, n_steps, use_interventions],
+            outputs=[perspectives_md, verdict_md, sim_status,
+                     trajectory_plot, metrics_plot, intervention_plot],
+        )
+
+        fb_submit.click(
+            fn=save_feedback,
+            inputs=[fb_crisis, fb_verdict, fb_rating, fb_comment],
+            outputs=[fb_status],
         )
         
         compare_btn.click(
