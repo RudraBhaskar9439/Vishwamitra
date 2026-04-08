@@ -447,16 +447,21 @@ class VIDYADemo:
             vertical_spacing=0.18,
             horizontal_spacing=0.12,
         )
-        colors = ['#6ea8ff', '#f87171', '#4ade80', '#f5b942']
+        colors = [
+            ('#6ea8ff', 'rgba(110,168,255,0.15)'),
+            ('#f87171', 'rgba(248,113,113,0.15)'),
+            ('#4ade80', 'rgba(74,222,128,0.15)'),
+            ('#f5b942', 'rgba(245,185,66,0.15)'),
+        ]
         positions = [(1, 1), (1, 2), (2, 1), (2, 2)]
         steps = np.arange(obs_arr.shape[0])
-        for (idx, _title), color, (row, col) in zip(plot_config, colors, positions):
+        for (idx, _title), (line_c, fill_c), (row, col) in zip(plot_config, colors, positions):
             series = obs_arr[:, idx] if idx < obs_arr.shape[1] else np.zeros_like(steps)
             fig.add_trace(
                 go.Scatter(
                     x=steps, y=series, mode='lines',
-                    line=dict(color=color, width=2.5),
-                    fill='tozeroy', fillcolor=color + '22',
+                    line=dict(color=line_c, width=2.5),
+                    fill='tozeroy', fillcolor=fill_c,
                 ),
                 row=row, col=col,
             )
@@ -482,7 +487,7 @@ class VIDYADemo:
             go.Scatter(
                 y=cumsum_rewards, mode='lines',
                 line=dict(color='#f5b942', width=2.5),
-                fill='tozeroy', fillcolor='#f5b94222',
+                fill='tozeroy', fillcolor='rgba(245,185,66,0.15)',
             ),
             row=1, col=1,
         )
@@ -500,7 +505,7 @@ class VIDYADemo:
             go.Scatter(
                 y=health, mode='lines',
                 line=dict(color='#6ea8ff', width=2.5),
-                fill='tozeroy', fillcolor='#6ea8ff22',
+                fill='tozeroy', fillcolor='rgba(110,168,255,0.15)',
             ),
             row=1, col=2,
         )
