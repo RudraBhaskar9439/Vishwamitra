@@ -33,6 +33,17 @@ try:
 except Exception:
     pass
 
+# ---------------------------------------------------------------------------
+# OpenEnv-required environment variables (per the hackathon sample inference)
+# Defaults are set ONLY for API_BASE_URL and MODEL_NAME, never for HF_TOKEN.
+# ---------------------------------------------------------------------------
+API_BASE_URL = os.getenv("API_BASE_URL", "<your-active-endpoint>")
+MODEL_NAME = os.getenv("MODEL_NAME", "<your-active-model>")
+HF_TOKEN = os.getenv("HF_TOKEN")
+
+# Optional — only relevant when using from_docker_image()
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
+
 from env.dropout_env import DropoutCommonsEnv
 from env.scenarios.funding_cut import FundingCutScenario
 from env.scenarios.teacher_shortage import TeacherShortageScenario
@@ -163,13 +174,23 @@ def _parse_action(text: str) -> np.ndarray:
         return _fallback_action()
 
 
+_PLACEHOLDER_DEFAULTS = {"<your-active-endpoint>", "<your-active-model>", "", None}
+
+
 class LLMPolicy:
     def __init__(self) -> None:
-        self.base_url = os.environ.get("API_BASE_URL", "")
-        self.model = os.environ.get("MODEL_NAME", "")
-        self.token = os.environ.get("HF_TOKEN", "")
+        # Read from the module-level constants so the spec defaults are honoured.
+        self.base_url = API_BASE_URL
+        self.model = MODEL_NAME
+        self.token = HF_TOKEN
         self.client = None
-        self.enabled = bool(self.base_url and self.model and self.token)
+        # Treat placeholder-default values as "unset" so the script falls back
+        # to the heuristic policy instead of trying to call a fake endpoint.
+        self.enabled = (
+            self.base_url not in _PLACEHOLDER_DEFAULTS
+            and self.model not in _PLACEHOLDER_DEFAULTS
+            and self.token not in _PLACEHOLDER_DEFAULTS
+        )
         if self.enabled:
             try:
                 from openai import OpenAI  # type: ignore
