@@ -1,14 +1,21 @@
 """
-VIDYA OpenEnv Round 1 — Inference Script
-=========================================
+Vishwamitra OpenEnv Round 1 — Inference Script
+==============================================
 
 Runs 3 tasks (easy / medium / hard) over the DropoutCommonsEnv using an
 LLM policy via the OpenAI-compatible client.
 
-Required environment variables:
-    API_BASE_URL - OpenAI-compatible base URL
-    MODEL_NAME   - model identifier
-    HF_TOKEN     - bearer token (used as API key)
+Required environment variables (injected by the hackathon's LiteLLM proxy):
+    API_BASE_URL - OpenAI-compatible base URL of the LiteLLM proxy
+    API_KEY      - participant API key
+    MODEL_NAME   - approved model identifier
+
+Optional:
+    LOCAL_IMAGE_NAME - only used by from_docker_image() flows
+
+Local dev fallback: if API_KEY is not set, the script will read HF_TOKEN
+from the environment / .env so the same script works against Groq /
+Fireworks / etc. without renaming variables.
 
 Logs follow the strict [START] / [STEP] / [END] stdout format.
 Designed to fit 2 vCPU / 8 GB RAM, completing in well under 20 minutes.
@@ -188,12 +195,17 @@ _PLACEHOLDER_DEFAULTS = {"<your-active-endpoint>", "<your-active-model>", "", No
 
 class LLMPolicy:
     def __init__(self) -> None:
-        # Read from the module-level constants so the spec defaults are honoured.
-        self.base_url = API_BASE_URL
-        self.model = MODEL_NAME
-        # Phase 2: prefer API_KEY (the hackathon's LiteLLM proxy injects this).
-        # Local dev: fall back to HF_TOKEN if API_KEY is not set.
-        self.token = API_KEY or HF_TOKEN
+        # ─────────────────────────────────────────────────────────────────
+        # Read the EXACT variables the hackathon's LiteLLM proxy injects.
+        # Per their spec:
+        #   base_url = os.environ["API_BASE_URL"]
+        #   api_key  = os.environ["API_KEY"]
+        # Local dev falls back to HF_TOKEN so the same script works
+        # against Groq / Fireworks / etc.
+        # ─────────────────────────────────────────────────────────────────
+        self.base_url = os.environ.get("API_BASE_URL", API_BASE_URL)
+        self.model = os.environ.get("MODEL_NAME", MODEL_NAME)
+        self.token = os.environ.get("API_KEY") or os.environ.get("HF_TOKEN") or HF_TOKEN
         self.client = None
         # Treat placeholder-default values as "unset" so the script falls back
         # to the heuristic policy instead of trying to call a fake endpoint.
@@ -206,9 +218,45 @@ class LLMPolicy:
             try:
                 from openai import OpenAI  # type: ignore
                 self.client = OpenAI(base_url=self.base_url, api_key=self.token)
+                print(
+                    f"[LLM] connected base_url={self.base_url} model={self.model}",
+                    flush=True,
+                )
             except Exception as e:
-                print(f"[WARN] Failed to init OpenAI client: {e}", file=sys.stderr)
+                print(f"[LLM] Failed to init OpenAI client: {e}", flush=True)
                 self.enabled = False
+        else:
+            print(
+                f"[LLM] disabled — base_url={self.base_url!r} "
+                f"model={self.model!r} token_set={bool(self.token)}",
+                flush=True,
+            )
+
+    def warmup(self) -> bool:
+        """Make one tiny call so the LiteLLM proxy registers the key.
+        Returns True if the call succeeds, False otherwise. Errors are
+        printed loudly to stdout (not swallowed) so they show up in
+        validator logs.
+        """
+        if not self.enabled or self.client is None:
+            return False
+        try:
+            resp = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": "Reply with the single word: ready"},
+                ],
+                temperature=0.0,
+                max_tokens=8,
+                timeout=30,
+            )
+            content = (resp.choices[0].message.content or "").strip()
+            print(f"[LLM] warmup OK reply={content!r}", flush=True)
+            return True
+        except Exception as e:
+            print(f"[LLM] warmup FAILED: {type(e).__name__}: {e}", flush=True)
+            return False
 
     def act(self, obs: np.ndarray, task: Task) -> np.ndarray:
         if not self.enabled or self.client is None:
@@ -233,7 +281,10 @@ class LLMPolicy:
             )
             return _parse_action(resp.choices[0].message.content or "")
         except Exception as e:
-            print(f"[WARN] LLM call failed: {e}", file=sys.stderr)
+            # Print to STDOUT (not stderr) so the validator's log capture
+            # picks this up. Don't swallow silently — the whole point of
+            # Phase 2 is that real proxy calls happen.
+            print(f"[LLM] call failed: {type(e).__name__}: {e}", flush=True)
             return _fallback_action(obs)
 
 
@@ -302,8 +353,22 @@ def main() -> int:
     t0 = time.time()
     policy = LLMPolicy()
     if not policy.enabled:
-        print("[WARN] LLM disabled (missing API_BASE_URL/MODEL_NAME/HF_TOKEN); "
-              "using fallback policy.", file=sys.stderr)
+        print(
+            "[LLM] disabled — set API_BASE_URL + API_KEY + MODEL_NAME to enable. "
+            "Falling back to heuristic policy.",
+            flush=True,
+        )
+    else:
+        # Eagerly call the proxy ONCE so it registers the key. If the call
+        # fails, we surface the exact error to stdout (not stderr) so the
+        # validator's log capture sees it instead of a silent fallback.
+        ok = policy.warmup()
+        if not ok:
+            print(
+                "[LLM] warmup failed — every step will fall back to the "
+                "heuristic policy. The proxy will NOT register any hits.",
+                flush=True,
+            )
 
     results = []
     for i, task in enumerate(TASKS):
