@@ -40,11 +40,19 @@ RUN pip install --no-cache-dir --user --upgrade pip && \
 COPY --chown=user:user frontend/package.json frontend/package-lock.json ./frontend/
 RUN cd frontend && npm ci --no-audit --no-fund
 
-# Copy the rest of the app.
+# Copy the rest of the app (including the pre-built frontend/dist that
+# we now commit to git — bypasses HF Spaces' silently-failing npm build).
 COPY --chown=user:user . .
 
-# Build the static React bundle into frontend/dist
-RUN cd frontend && npm run build
+# Build the React bundle ONLY IF a pre-built dist isn't already shipped.
+# This makes deploys deterministic — the dist that gets served is the
+# one committed to the repo, not a re-build that may fail on HF.
+RUN if [ ! -f frontend/dist/index.html ]; then \
+        echo "[docker] no pre-built dist; running npm run build" && \
+        cd frontend && npm run build; \
+    else \
+        echo "[docker] pre-built dist found; skipping npm run build"; \
+    fi
 
 # HF Spaces injects $PORT (default 7860). server:api is the FastAPI app
 # defined in server.py — exposes /reset, /step, /state and mounts the
