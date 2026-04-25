@@ -67,5 +67,5 @@ inference = "inference:main"
 py-modules = ["app", "inference", "validate"]
 
 [tool.setuptools.packages.find]
-include = ["env*", "agents*", "training*", "server*"]
+include = ["env*", "agents*", "training*", "server*", "swarms*"]
 exclude = ["checkpoints*", "logs*", "docs*", "tests*"]

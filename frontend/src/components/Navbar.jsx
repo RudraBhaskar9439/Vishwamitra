@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { VIDYA_LOGO } from '../assets/logo.js'
 
-export default function Navbar({ onHome, onLaunch, onNavigate }) {
+export default function Navbar({ onHome, onLaunch, onNavigate, onVishwamitra }) {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light')
 
   useEffect(() => {
@@ -26,6 +26,9 @@ export default function Navbar({ onHome, onLaunch, onNavigate }) {
           <button onClick={() => go('features')}>Features</button>
           <button onClick={() => go('how')}>How it works</button>
           <button onClick={() => go('get-started')}>Get started</button>
+          {onVishwamitra && (
+            <button onClick={onVishwamitra}>Swarms</button>
+          )}
         </nav>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <button

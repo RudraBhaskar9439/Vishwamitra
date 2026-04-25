@@ -131,6 +131,27 @@ api = FastAPI(
     ),
 )
 
+# CORS for local Vite dev server (port 5173) and any frontend during dev.
+try:
+    from fastapi.middleware.cors import CORSMiddleware
+    api.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+except Exception:  # noqa: BLE001
+    pass
+
+# Mount the Vishwamitra swarm-deliberation router (loads roles.yaml, manages
+# 4 swarms x 3 personas, returns ResonanceReport).
+try:
+    from server.swarm_routes import router as _swarm_router
+    api.include_router(_swarm_router)
+except Exception as _swarm_err:  # noqa: BLE001
+    print(f"[server] swarm router not mounted: {_swarm_err}")
+
 
 _OPENENV_INFO = {
     "name": "vishwamitra-dropout-commons",

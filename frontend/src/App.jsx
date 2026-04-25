@@ -7,17 +7,29 @@ import GetStarted from './components/GetStarted.jsx'
 import Footer from './components/Footer.jsx'
 import Simulator from './components/Simulator.jsx'
 import VoiceSession from './components/VoiceSession.jsx'
+import Vishwamitra from './components/Vishwamitra/index.jsx'
 
 export default function App() {
-  const [view, setView] = useState('home') // home | simulator | voice
+  const [view, setView] = useState('home') // home | simulator | voice | vishwamitra
 
   const goHome = () => setView('home')
   const goSim = () => setView('simulator')
   const goVoice = () => setView('voice')
+  const goVishwamitra = () => setView('vishwamitra')
+
+  // Vishwamitra is full-screen — render it standalone (no Navbar/Footer wrapping).
+  if (view === 'vishwamitra') {
+    return <Vishwamitra onBack={goHome} />
+  }
 
   return (
     <div className="app">
-      <Navbar onHome={goHome} onLaunch={goSim} onNavigate={goHome} />
+      <Navbar
+        onHome={goHome}
+        onLaunch={goSim}
+        onNavigate={goHome}
+        onVishwamitra={goVishwamitra}
+      />
 
       {view === 'home' && (
         <>
@@ -33,6 +45,7 @@ export default function App() {
           <button onClick={goHome}>← Home</button>
           <button className={view === 'simulator' ? 'on' : ''} onClick={goSim}>Simulator</button>
           <button className={view === 'voice' ? 'on' : ''} onClick={goVoice}>Voice</button>
+          <button onClick={goVishwamitra}>Vishwamitra Swarms</button>
         </div>
       )}
 

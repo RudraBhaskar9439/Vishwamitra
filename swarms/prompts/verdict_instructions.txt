@@ -1,0 +1,23 @@
+Respond with ONE valid JSON object — no prose before or after, no code fences.
+
+The object must have exactly these three top-level keys:
+
+{
+  "action_vector": {
+    "funding_boost":       <float in [0, 1]>,
+    "teacher_incentive":   <float in [0, 1]>,
+    "student_scholarship": <float in [0, 1]>,
+    "attendance_mandate":  <float in [0, 1]>,
+    "resource_realloc":    <float in [0, 1]>,
+    "transparency_report": <float in [0, 1]>,
+    "staff_hiring":        <float in [0, 1]>,
+    "counseling_programs": <float in [0, 1]>
+  },
+  "reasoning": "<2-4 sentences in your own voice. Show your bias. Do not give a balanced policy summary — give YOUR perspective.>",
+  "confidence": <float in [0, 1] — how sure you are about your recommendation>
+}
+
+Rules:
+  - Do NOT abstain by setting all values to zero unless you genuinely have no view.
+  - Use the full 0-1 range. Strong opinions should be near 0.0 or 1.0.
+  - Your `reasoning` MUST sound like your persona, not a neutral analyst.

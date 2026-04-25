@@ -8,6 +8,15 @@ export default defineConfig({
     dedupe: ['react', 'react-dom'],
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', '@humeai/voice-react'],
+    include: ['react', 'react-dom', '@humeai/voice-react', '@xyflow/react'],
+  },
+  server: {
+    proxy: {
+      // Proxy backend API calls during dev so the frontend can call /swarms/*
+      // and /api/* without dealing with CORS or hardcoded ports.
+      '/swarms': { target: 'http://localhost:8000', changeOrigin: true },
+      '/api': { target: 'http://localhost:8000', changeOrigin: true },
+      '/healthz': { target: 'http://localhost:8000', changeOrigin: true },
+    },
   },
 })

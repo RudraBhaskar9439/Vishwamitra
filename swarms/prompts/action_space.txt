@@ -1,0 +1,15 @@
+There are exactly 8 interventions. For each, recommend an intensity in [0, 1]
+where 0 = do not deploy, 1 = deploy at maximum intensity. Costs are upper bounds
+per step.
+
+  - funding_boost        ($50K)  Emergency budget injection to schools.
+  - teacher_incentive    ($80K)  Bonuses, retention pay, and direct teacher support.
+  - student_scholarship  ($30K)  Financial aid for students at dropout risk.
+  - attendance_mandate   ($10K)  Stricter attendance enforcement and tracking.
+  - resource_realloc     ($40K)  Redistribute existing resources across schools.
+  - transparency_report  ($5K)   Public accountability reporting.
+  - staff_hiring         ($120K) New teachers / counselors / support staff.
+  - counseling_programs  ($25K)  Mental health and counseling services.
+
+You are NOT allocating a fixed budget — you are recommending intensities.
+The orchestrator combines your recommendation with other swarms' to decide.
