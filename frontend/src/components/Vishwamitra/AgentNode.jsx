@@ -1,12 +1,15 @@
 import { Handle, Position } from '@xyflow/react'
 
 // Color is provided via data.color (set per-role in SwarmGraph).
+// rgb is provided via data.rgb (e.g., "56, 189, 248") so CSS rules
+// can mix it into rgba() without parsing the hex at runtime.
+//
 // data shape:
-//   { name, role, color, action_vector: number[8], confidence: number,
+//   { name, role, color, rgb, action_vector: number[8], confidence: number,
 //     personaId, abstain: bool, onHover(payload, evt), onLeave() }
 export default function AgentNode({ data }) {
   const {
-    name, color, action_vector = [], confidence = 0,
+    name, color, rgb, action_vector = [], confidence = 0,
     abstain = false, tag = '', onHover, onLeave, personaId,
   } = data
 
@@ -22,15 +25,33 @@ export default function AgentNode({ data }) {
 
   const display = (name || '').split(',')[0]
   const conf = Math.round(confidence * 100)
+  const isActive = !abstain && confidence > 0.0
+  const isHighConf = !abstain && confidence >= 0.6
+
+  // CSS variables consumed by .vm-node, .vm-node-pulse styles.
+  const nodeStyle = {
+    borderLeftColor: color,
+    ['--node-color']: color,
+    ['--node-rgb']: rgb || '94, 234, 212',
+  }
 
   return (
     <div
-      className={`vm-node ${abstain ? 'abstain' : ''}`}
-      style={{ borderLeftColor: color }}
+      className={[
+        'vm-node',
+        abstain ? 'abstain' : '',
+        isActive ? 'is-active' : '',
+        isHighConf ? 'is-high-conf' : '',
+      ].filter(Boolean).join(' ')}
+      style={nodeStyle}
       onMouseEnter={handleEnter}
       onMouseMove={handleMove}
       onMouseLeave={handleLeave}
     >
+      {/* Ambient glow layer behind the card content. CSS handles
+          breathing animation; element stays inert (pointer-events:none). */}
+      <span className="vm-node-glow" aria-hidden="true" />
+
       {/* invisible handles so react-flow can still wire edges */}
       <Handle type="target" position={Position.Top} />
       <Handle type="source" position={Position.Bottom} />

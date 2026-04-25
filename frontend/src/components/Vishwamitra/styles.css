@@ -249,6 +249,7 @@
   flex: 1;
   position: relative;
   min-height: 0;
+  overflow: hidden;
 }
 /* react-flow overrides */
 .vm-graph-wrap .react-flow {
@@ -274,43 +275,44 @@
   background: var(--vm-bg-elev);
   color: var(--vm-accent);
 }
-.vm-graph-wrap .react-flow__edge-path {
-  stroke: var(--vm-border);
-  stroke-width: 1;
-  opacity: 0.6;
-}
 .vm-graph-wrap .react-flow__attribution {
   background: transparent;
   font-size: 9px;
   opacity: 0.4;
 }
 
-/* Cluster (parent) node */
-.vm-cluster {
-  background: rgba(255, 255, 255, 0.015);
-  border: 1px dashed rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
-  padding: 0;
-  position: relative;
+/* ---------- Edges (animated dashed flow — slow & subtle) ---------- */
+.vm-graph-wrap .react-flow__edge-path {
+  stroke-width: 1;
+  opacity: 0.55;
 }
-.vm-cluster-label {
-  position: absolute;
-  top: 6px; left: 12px;
-  font-family: var(--vm-mono);
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--vm-text-dim);
+/* React-flow's built-in `animated:true` already animates the dash via
+   stroke-dashoffset. We just slow it down so it reads as ambient flow,
+   not anxious flicker. */
+.vm-graph-wrap .react-flow__edge.animated .react-flow__edge-path {
+  animation-duration: 6s !important;
+  animation-timing-function: linear !important;
 }
-.vm-cluster-confbar {
-  position: absolute;
-  bottom: 6px; right: 12px;
-  font-family: var(--vm-mono);
-  font-size: 10px;
-  color: var(--vm-text-mute);
+.vm-graph-wrap .react-flow__edge.vm-edge-intra .react-flow__edge-path {
+  animation-duration: 9s !important;
+  opacity: 0.35;
+  stroke-width: 0.8;
+}
+.vm-graph-wrap .react-flow__edge.vm-edge-cross .react-flow__edge-path {
+  animation-duration: 7s !important;
+  opacity: 0.45;
+  stroke-width: 1;
 }
 
-/* Agent node card */
+/* ---------- Cluster (parent) node ---------- */
+/* The cluster border itself is set inline in JSX — keep it simple.
+   Here we add a faint inner-tint that does NOT bleed past the box. */
+.vm-cluster {
+  border-radius: 8px;
+  background-color: rgba(var(--cluster-rgb, 94, 234, 212), 0.015);
+}
+
+/* ---------- Agent node card ---------- */
 .vm-node {
   width: 152px;
   background: var(--vm-bg-panel);
@@ -319,16 +321,67 @@
   padding: 8px 10px;
   font-size: 11px;
   cursor: pointer;
-  transition: all .15s;
   position: relative;
+  border-radius: 4px;
+  isolation: isolate;
+  /* Idle: a barely-there role-tinted glow. No animation. */
+  box-shadow: 0 0 10px -4px rgba(var(--node-rgb, 94, 234, 212), 0.18);
+  transition:
+    transform .18s ease,
+    border-color .18s ease,
+    background .18s ease,
+    box-shadow .18s ease;
 }
+
+/* Ambient glow layer kept (component sets it) but rendered as a quiet,
+   constant tint. No animation. No scale. */
+.vm-node-glow {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.08;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(var(--node-rgb), 0.35) 0%,
+    transparent 70%
+  );
+  transition: opacity .18s ease;
+}
+
+/* Active node = real verdict, slightly more visible glow. Still no animation. */
+.vm-node.is-active .vm-node-glow {
+  opacity: 0.16;
+}
+.vm-node.is-high-conf .vm-node-glow {
+  opacity: 0.24;
+}
+
+/* Hover — gentle lift + role-coloured shadow. No scale-bounce. */
 .vm-node:hover {
+  transform: translateY(-1px);
   background: var(--vm-bg-elev);
-  border-color: var(--vm-accent);
-  z-index: 10;
-  box-shadow: 0 0 16px rgba(94, 234, 212, 0.18);
+  border-color: rgba(var(--node-rgb), 0.55);
+  z-index: 100;
+  box-shadow:
+    0 0 0 1px rgba(var(--node-rgb), 0.35),
+    0 0 18px -4px rgba(var(--node-rgb), 0.40),
+    0 4px 14px rgba(0, 0, 0, 0.35);
 }
-.vm-node.abstain { opacity: 0.45; }
+.vm-node:hover .vm-node-glow {
+  opacity: 0.45;
+}
+.vm-node:hover .vm-node-name {
+  color: rgba(var(--node-rgb), 1);
+}
+
+.vm-node.abstain { opacity: 0.4; }
+.vm-node.abstain,
+.vm-node.abstain .vm-node-glow {
+  box-shadow: none;
+}
+.vm-node.abstain .vm-node-glow { display: none; }
 .vm-node-head {
   display: flex;
   align-items: center;
@@ -375,7 +428,9 @@
   flex: 1;
   background: var(--vm-text-mute);
   min-height: 2px;
-  transition: background .15s;
+  position: relative;
+  transition: background .2s ease, height .3s ease;
+  border-radius: 1px;
 }
 
 /* hide react-flow handles entirely on agent nodes */
