@@ -36,7 +36,26 @@ class Swarm:
         scenario: str,
         action_space_doc: str,
         verdict_instructions: str,
+        *,
+        model: str | None = None,
+        persona_weights: dict[str, float] | None = None,
+        persona_fits: list[dict[str, Any]] | None = None,
     ) -> SwarmVerdict:
+        """All N personas deliberate in parallel.
+
+        Parameters
+        ----------
+        model : str | None
+            L1 orchestrator's model assignment for this swarm — forwarded
+            to every agent in the swarm.
+        persona_weights : dict[str, float] | None
+            L2 orchestrator's per-persona weight (persona_id → weight).
+            Used inside _aggregate to multiply confidence × fit_weight.
+            None means equal weight per persona (legacy behaviour).
+        persona_fits : list[dict] | None
+            Full PersonaFitDecision dicts to attach to the SwarmVerdict
+            for downstream UI/audit. Optional.
+        """
         verdicts: list[Verdict] = await asyncio.gather(
             *[
                 a.deliberate(
@@ -44,15 +63,21 @@ class Swarm:
                     scenario=scenario,
                     action_space_doc=action_space_doc,
                     verdict_instructions=verdict_instructions,
+                    model=model,
                 )
                 for a in self.agents
             ],
             return_exceptions=False,
         )
-        return self._aggregate(verdicts)
+        return self._aggregate(verdicts, persona_weights or {}, persona_fits or [])
 
     # ------------------------- aggregation -------------------------
-    def _aggregate(self, verdicts: list[Verdict]) -> SwarmVerdict:
+    def _aggregate(
+        self,
+        verdicts: list[Verdict],
+        persona_weights: dict[str, float],
+        persona_fits: list[dict[str, Any]],
+    ) -> SwarmVerdict:
         # Drop verdicts that errored out (zero-confidence abstentions).
         live = [v for v in verdicts if v.error is None and v.confidence > 0.0]
         n_actions = len(ACTION_NAMES)
@@ -64,17 +89,24 @@ class Swarm:
                 aggregated_action=[0.0] * n_actions,
                 intra_dissent=[0.0] * n_actions,
                 mean_confidence=0.0,
+                persona_fits=persona_fits,
             )
 
-        # Confidence-weighted mean per intervention dimension.
-        weights = [v.confidence for v in live]
-        wsum = sum(weights) or 1.0
+        # Combined weight = self-reported confidence × L2 fit weight.
+        # Fit weight defaults to 1.0 when no L2 decision was supplied.
+        combined = [
+            v.confidence * float(persona_weights.get(v.persona_id, 1.0))
+            for v in live
+        ]
+        wsum = sum(combined) or 1.0
         agg = [
-            sum(v.action_vector[i] * v.confidence for v in live) / wsum
+            sum(v.action_vector[i] * w for v, w in zip(live, combined)) / wsum
             for i in range(n_actions)
         ]
 
-        # Within-swarm dissent = stdev across personas, per dimension.
+        # Within-swarm dissent = stdev across personas, per dimension —
+        # UNWEIGHTED so it surfaces raw disagreement among the lenses,
+        # independent of who the L2 router thinks should be loud.
         if len(live) >= 2:
             dissent = [
                 pstdev([v.action_vector[i] for v in live]) for i in range(n_actions)
@@ -82,10 +114,13 @@ class Swarm:
         else:
             dissent = [0.0] * n_actions
 
+        # mean_confidence stays unweighted — it's the swarm's "voice strength"
+        # for cross-swarm aggregation, conceptually distinct from fit.
         return SwarmVerdict(
             role=self.role,
             verdicts=verdicts,
             aggregated_action=agg,
             intra_dissent=dissent,
-            mean_confidence=mean(weights),
+            mean_confidence=mean([v.confidence for v in live]),
+            persona_fits=persona_fits,
         )

@@ -56,10 +56,13 @@ export default function VerdictPanel({ report, state, scenario, info }) {
     if (exporting) return
     setExporting(true); setExportErr(null)
     try {
+      // Single backend call internally runs 2 LLM calls and merges. UI
+      // shows a generic synthesising state; the request typically takes
+      // 25-45s on the heavyweight model.
       const paper = await generatePolicyReport({ report, state, scenario })
       renderIEEEPolicyPDF({ paper, report })
     } catch (e) {
-      console.error('IEEE report generation failed:', e)
+      console.error('Policy brief generation failed:', e)
       setExportErr(String(e.message || e))
     } finally {
       setExporting(false)
@@ -150,7 +153,7 @@ export default function VerdictPanel({ report, state, scenario, info }) {
           disabled={exporting}
         >
           {exporting
-            ? '◐ Synthesising Policy Brief…'
+            ? '◐ Synthesising In-Depth Brief… (≈30–45s)'
             : '⬇ Generate Educational Policy Brief (PDF)'}
         </button>
         {exportErr ? (
@@ -160,7 +163,7 @@ export default function VerdictPanel({ report, state, scenario, info }) {
         ) : (
           <div className="vm-export-sub">
             {exporting
-              ? 'narrative analysis · projections · ~15–30s'
+              ? 'scenario analysis · roadmap · risk register · feedback synthesis'
               : `${(report.swarm_verdicts || []).reduce((acc, s) => acc + (s.verdicts || []).length, 0)} agents · ${flags.size} dissonance flag${flags.size === 1 ? '' : 's'} · LLM-authored`}
           </div>
         )}

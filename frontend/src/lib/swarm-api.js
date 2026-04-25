@@ -10,11 +10,13 @@ export async function getSwarmInfo() {
   return res.json()
 }
 
-export async function deliberate({ state, scenario }) {
+export async function deliberate({ state, scenario, orchestratorOverrides = null }) {
+  const body = { state, scenario }
+  if (orchestratorOverrides) body.orchestrator_overrides = orchestratorOverrides
   const res = await fetch(`${BASE}/swarms/deliberate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ state, scenario }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     let detail = ''
@@ -23,6 +25,28 @@ export async function deliberate({ state, scenario }) {
   }
   return res.json()
 }
+
+export async function previewPlan({ state, orchestratorOverrides = null }) {
+  const body = { state }
+  if (orchestratorOverrides) body.orchestrator_overrides = orchestratorOverrides
+  const res = await fetch(`${BASE}/swarms/preview-plan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    let detail = ''
+    try { detail = (await res.json()).detail || '' } catch {}
+    throw new Error(`/swarms/preview-plan → ${res.status}${detail ? ': ' + detail : ''}`)
+  }
+  return res.json()
+}
+
+export const ORCHESTRATOR_ROLES = ['student', 'teacher', 'admin', 'policymaker']
+export const ORCHESTRATOR_MODELS = [
+  'llama-3.3-70b-versatile',  // heavy
+  'llama-3.1-8b-instant',     // light
+]
 
 // Generates an IEEE-style narrative policy paper from a prior deliberation
 // report. This makes one LLM call (~15-30s) and returns structured prose.

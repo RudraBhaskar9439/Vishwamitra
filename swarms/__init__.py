@@ -13,11 +13,20 @@ Public entry point:
 """
 
 from swarms.orchestrator.swarm_manager import SwarmManager
+from swarms.orchestrator.router import (
+    WeightAllocator, RouterDecision, OrchestratorPlan,
+    PersonaAllocator, PersonaFitDecision,
+)
 from swarms.core.verdict import Verdict, SwarmVerdict, ResonanceReport
 from swarms.core.persona import Persona
 
 __all__ = [
     "SwarmManager",
+    "WeightAllocator",
+    "RouterDecision",
+    "OrchestratorPlan",
+    "PersonaAllocator",
+    "PersonaFitDecision",
     "Verdict",
     "SwarmVerdict",
     "ResonanceReport",

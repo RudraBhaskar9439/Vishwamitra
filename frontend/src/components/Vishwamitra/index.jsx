@@ -3,6 +3,7 @@ import StateEditor from './StateEditor.jsx'
 import SwarmGraph, { ROLE_COLORS } from './SwarmGraph.jsx'
 import VerdictPanel from './VerdictPanel.jsx'
 import AgentTooltip from './AgentTooltip.jsx'
+import OrchestratorPanel from './OrchestratorPanel.jsx'
 import { deliberate, getSwarmInfo, DEFAULT_STATE, DEFAULT_SCENARIO } from '../../lib/swarm-api.js'
 import './styles.css'
 
@@ -14,6 +15,8 @@ export default function Vishwamitra({ onBack }) {
   const [error, setError] = useState(null)
   const [info, setInfo] = useState(null)
   const [hoveredId, setHoveredId] = useState(null)
+  const [orchMode, setOrchMode] = useState('auto')         // 'auto' | 'manual'
+  const [orchOverrides, setOrchOverrides] = useState({})   // { role: { model, verdict_weight } }
 
   const mouseRef = useRef({ x: 0, y: 0 })
 
@@ -33,8 +36,12 @@ export default function Vishwamitra({ onBack }) {
 
   async function runDeliberation() {
     setLoading(true); setError(null)
+    const orchestratorOverrides =
+      orchMode === 'manual' && Object.keys(orchOverrides).length
+        ? { mode: 'manual', roles: orchOverrides }
+        : null
     try {
-      const r = await deliberate({ state, scenario })
+      const r = await deliberate({ state, scenario, orchestratorOverrides })
       setReport(r)
     } catch (e) {
       setError(String(e.message || e))
@@ -116,6 +123,13 @@ export default function Vishwamitra({ onBack }) {
         </div>
 
         <div className="vm-pane center">
+          <OrchestratorPanel
+            state={state}
+            mode={orchMode}
+            onModeChange={setOrchMode}
+            overrides={orchOverrides}
+            onOverridesChange={setOrchOverrides}
+          />
           <div className="vm-section-h">Swarm Topology</div>
           <SwarmGraph
             report={report}

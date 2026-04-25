@@ -35,17 +35,76 @@ class LLMConfig:
     provider_name: str
 
 
+_PROVIDER_ALIASES = {
+    "groq":        "GROQ_API_KEY",
+    "together":    "TOGETHER_API_KEY",
+    "togetherai":  "TOGETHER_API_KEY",
+    "fireworks":   "FIREWORKS_API_KEY",
+    "hf":          "HF_TOKEN",
+    "huggingface": "HF_TOKEN",
+    "openai":      "OPENAI_API_KEY",
+}
+
+
+def _defaults_for(env_key: str) -> tuple[str, str] | None:
+    """Return (base_url, default_model) for a given provider env key."""
+    for k, base, model in _PROVIDER_DEFAULTS:
+        if k == env_key:
+            return base, model
+    return None
+
+
 def _resolve_config() -> LLMConfig:
     """
-    Pick provider config from env. Honor explicit API_BASE_URL/MODEL_NAME
-    overrides if set; otherwise auto-detect from whichever provider key
-    is present.
+    Pick provider config from env, in order of precedence:
+
+      1. LLM_PROVIDER env var (e.g. "together", "fireworks", "groq", "hf",
+         "openai") — explicit, wins over everything else.
+      2. API_BASE_URL + MODEL_NAME — if set, the api_key is the matching
+         provider's key (derived from API_BASE_URL host) or the first
+         available key as a fallback.
+      3. Auto-detect: walk _PROVIDER_DEFAULTS in priority order and use
+         the first provider whose API key is set.
     """
     explicit_base = os.getenv("API_BASE_URL")
     explicit_model = os.getenv("MODEL_NAME")
+    provider_override = (os.getenv("LLM_PROVIDER") or "").strip().lower()
 
-    # If user has explicit base+model, just find any matching key
+    # 1. Explicit LLM_PROVIDER override
+    if provider_override:
+        env_key = _PROVIDER_ALIASES.get(provider_override)
+        if env_key is None:
+            raise RuntimeError(
+                f"LLM_PROVIDER={provider_override!r} not recognised. "
+                f"Use one of: {', '.join(sorted(set(_PROVIDER_ALIASES)))}"
+            )
+        api_key = os.getenv(env_key)
+        if not api_key:
+            raise RuntimeError(
+                f"LLM_PROVIDER={provider_override} but {env_key} is not set in environment."
+            )
+        defaults = _defaults_for(env_key)
+        base_url = explicit_base or (defaults[0] if defaults else "")
+        model = explicit_model or (defaults[1] if defaults else "")
+        return LLMConfig(
+            base_url=base_url,
+            model=model,
+            api_key=api_key,
+            provider_name=env_key,
+        )
+
+    # 2. Explicit base+model. Match the api_key to the URL host where possible.
     if explicit_base and explicit_model:
+        for env_key, base_url, _ in _PROVIDER_DEFAULTS:
+            host_hint = base_url.split("/")[2] if "://" in base_url else ""
+            if host_hint and host_hint in explicit_base and os.getenv(env_key):
+                return LLMConfig(
+                    base_url=explicit_base,
+                    model=explicit_model,
+                    api_key=os.environ[env_key],
+                    provider_name=env_key,
+                )
+        # fallback: first available key
         for env_key, _, _ in _PROVIDER_DEFAULTS:
             if os.getenv(env_key):
                 return LLMConfig(
@@ -59,13 +118,13 @@ def _resolve_config() -> LLMConfig:
             "Set one of: GROQ_API_KEY, TOGETHER_API_KEY, FIREWORKS_API_KEY, HF_TOKEN, OPENAI_API_KEY"
         )
 
-    # Auto-detect from first available key
+    # 3. Auto-detect: first available key wins
     for env_key, base_url, model in _PROVIDER_DEFAULTS:
         key_val = os.getenv(env_key)
         if key_val:
             return LLMConfig(
-                base_url=explicit_base or base_url,
-                model=explicit_model or model,
+                base_url=base_url,
+                model=model,
                 api_key=key_val,
                 provider_name=env_key,
             )
@@ -106,9 +165,9 @@ class LLMClient:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     # ------------------------- cache helpers -------------------------
-    def _cache_key(self, system: str, user: str, json_mode: bool) -> str:
+    def _cache_key(self, system: str, user: str, json_mode: bool, model: str) -> str:
         h = hashlib.sha256()
-        h.update(self.config.model.encode())
+        h.update(model.encode())
         h.update(b"\x00")
         h.update(system.encode())
         h.update(b"\x00")
@@ -145,21 +204,27 @@ class LLMClient:
         temperature: float = 0.8,
         max_tokens: int = 1024,
         use_cache: bool = True,
+        model: str | None = None,
     ) -> str:
         """
         Send a single-turn chat. Returns the assistant content string.
 
         json_mode requests structured JSON output via response_format
         when the provider supports it. Falls back silently if not.
+
+        `model` overrides self.config.model for this call only — used by
+        the orchestrator to route per-role requests to different models on
+        the same provider.
         """
-        key = self._cache_key(system, user, json_mode)
+        used_model = model or self.config.model
+        key = self._cache_key(system, user, json_mode, used_model)
         if use_cache:
             cached = self._cache_get(key)
             if cached is not None:
                 return cached
 
         kwargs: dict[str, Any] = {
-            "model": self.config.model,
+            "model": used_model,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -193,10 +258,12 @@ class LLMClient:
         temperature: float = 0.8,
         max_tokens: int = 1024,
         use_cache: bool = True,
+        model: str | None = None,
     ) -> dict[str, Any]:
         """
         Same as chat() but parses the result as JSON. Retries once with
-        a stricter instruction if the first parse fails.
+        a stricter instruction if the first parse fails. `model` is
+        forwarded to chat() unchanged.
         """
         raw = await self.chat(
             system=system,
@@ -205,6 +272,7 @@ class LLMClient:
             temperature=temperature,
             max_tokens=max_tokens,
             use_cache=use_cache,
+            model=model,
         )
         try:
             return json.loads(_extract_json(raw))
@@ -221,6 +289,7 @@ class LLMClient:
                 temperature=max(0.2, temperature - 0.4),
                 max_tokens=max_tokens,
                 use_cache=False,
+                model=model,
             )
             return json.loads(_extract_json(raw2))
 

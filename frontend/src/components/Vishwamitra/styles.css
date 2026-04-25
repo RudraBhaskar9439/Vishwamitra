@@ -585,6 +585,225 @@
   min-height: 2px;
 }
 
+/* ----------------------------- ORCHESTRATOR PANEL ----------------------------- */
+.vm-orchestrator {
+  flex: 0 0 auto;
+  background: var(--vm-bg-panel);
+  border-bottom: 1px solid var(--vm-border);
+  font-family: var(--vm-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 8px 14px 10px;
+}
+
+.vm-orch-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.vm-orch-title {
+  color: var(--vm-accent);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  font-size: 10px;
+}
+.vm-orch-l2-badge {
+  font-family: var(--vm-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  padding: 2px 6px;
+  border: 1px solid var(--vm-amber);
+  color: var(--vm-amber);
+  background: rgba(251, 191, 36, 0.08);
+  border-radius: 2px;
+  cursor: help;
+}
+.vm-orch-modeswitch {
+  display: inline-flex;
+  border: 1px solid var(--vm-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.vm-orch-modeswitch button {
+  background: transparent;
+  border: none;
+  color: var(--vm-text-dim);
+  padding: 3px 10px;
+  font-family: var(--vm-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  border-right: 1px solid var(--vm-border);
+}
+.vm-orch-modeswitch button:last-child { border-right: none; }
+.vm-orch-modeswitch button.on {
+  background: var(--vm-accent);
+  color: #02211a;
+  font-weight: 700;
+}
+.vm-orch-modeswitch button:hover:not(.on) { color: var(--vm-text); }
+
+.vm-orch-spacer { flex: 1; }
+
+.vm-orch-crisis {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--vm-text-dim);
+  font-size: 10px;
+}
+
+.vm-orch-clear {
+  background: transparent;
+  border: 1px solid var(--vm-border);
+  color: var(--vm-text-mute);
+  padding: 3px 8px;
+  font-family: var(--vm-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  border-radius: 2px;
+}
+.vm-orch-clear:hover { border-color: var(--vm-red); color: var(--vm-red); }
+
+.vm-orch-rows {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  column-gap: 18px;
+  row-gap: 4px;
+}
+
+.vm-orch-row {
+  display: grid;
+  grid-template-columns: 8px 80px 70px 1fr 110px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+}
+.vm-orch-row.manual {
+  border-color: var(--vm-amber);
+  background: rgba(251, 191, 36, 0.04);
+}
+.vm-orch-row .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+}
+.vm-orch-row .role {
+  font-weight: 700;
+  color: var(--vm-text);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+.vm-orch-row .model-tag {
+  font-size: 9px;
+  font-family: var(--vm-mono);
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 2px;
+  letter-spacing: 0.1em;
+  border: 1px solid;
+  text-align: center;
+  width: 64px;
+}
+.vm-orch-row .model-tag.heavy {
+  color: var(--vm-amber);
+  border-color: var(--vm-amber);
+  background: rgba(251, 191, 36, 0.1);
+}
+.vm-orch-row .model-tag.light {
+  color: var(--vm-blue);
+  border-color: var(--vm-blue);
+  background: rgba(96, 165, 250, 0.08);
+}
+.vm-orch-row .weight {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--vm-text-dim);
+  font-size: 10px;
+}
+.vm-orch-row .weight .wval {
+  font-family: var(--vm-mono);
+  font-weight: 700;
+  color: var(--vm-text);
+  font-size: 10px;
+  width: 28px;
+  text-align: right;
+}
+.vm-orch-row .attn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--vm-text-mute);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.vm-orch-bar {
+  display: inline-block;
+  height: 5px;
+  background: var(--vm-bg-elev);
+  border-radius: 1px;
+  position: relative;
+  overflow: hidden;
+}
+.vm-orch-bar .fill {
+  position: absolute; top: 0; left: 0; bottom: 0;
+  background: var(--vm-accent);
+}
+
+.vm-orch-select {
+  background: var(--vm-bg-elev);
+  border: 1px solid var(--vm-border);
+  color: var(--vm-text);
+  font-family: var(--vm-mono);
+  font-size: 10px;
+  padding: 2px 4px;
+  border-radius: 2px;
+  width: 100%;
+  outline: none;
+}
+.vm-orch-select:focus { border-color: var(--vm-accent); }
+
+.vm-orch-weight-slider {
+  -webkit-appearance: none;
+  flex: 1;
+  height: 4px;
+  background: var(--vm-bg-elev);
+  border-radius: 1px;
+  outline: none;
+}
+.vm-orch-weight-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px; height: 10px;
+  background: var(--vm-amber);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.vm-orch-weight-slider::-moz-range-thumb {
+  width: 10px; height: 10px;
+  background: var(--vm-amber);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.vm-orch-err {
+  color: var(--vm-red);
+  font-size: 10px;
+  margin-top: 6px;
+}
+.vm-orch-empty {
+  color: var(--vm-text-mute);
+  font-size: 10px;
+  margin-top: 6px;
+  font-style: italic;
+}
+
 /* ----------------------------- ACCORDIONS ----------------------------- */
 .vm-acc-list {
   display: flex;
@@ -673,6 +892,57 @@
   font-family: var(--vm-mono);
   font-size: 10px;
   color: var(--vm-text-dim);
+}
+
+/* L2 PersonaAllocator badge */
+.vm-fit-badge {
+  font-family: var(--vm-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 1px 5px;
+  border-radius: 2px;
+  border: 1px solid;
+  cursor: help;
+  white-space: nowrap;
+}
+.vm-fit-badge.high {
+  color: var(--vm-amber);
+  border-color: var(--vm-amber);
+  background: rgba(251, 191, 36, 0.10);
+}
+.vm-fit-badge.mid {
+  color: var(--vm-text-dim);
+  border-color: var(--vm-border);
+  background: var(--vm-bg-elev);
+}
+.vm-fit-badge.low {
+  color: var(--vm-text-mute);
+  border-color: var(--vm-border-soft);
+  background: transparent;
+  opacity: 0.7;
+}
+
+.vm-fit-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 2px 0 6px;
+}
+.vm-fit-chip {
+  font-family: var(--vm-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: var(--vm-text-mute);
+  background: var(--vm-bg-elev);
+  padding: 1px 6px;
+  border-radius: 2px;
+  border: 1px solid var(--vm-border-soft);
+}
+.vm-fit-chip b {
+  color: var(--vm-accent);
+  margin-left: 3px;
+  font-weight: 700;
 }
 .vm-agent-reason {
   font-size: 11px;

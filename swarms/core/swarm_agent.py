@@ -23,7 +23,12 @@ class SwarmAgent:
         scenario: str,
         action_space_doc: str,
         verdict_instructions: str,
+        *,
+        model: str | None = None,
     ) -> Verdict:
+        """Run one persona's deliberation. `model` is an optional per-call
+        override forwarded by the orchestrator (router) so different swarms
+        can use different LLMs on the same provider."""
         user_prompt = self._build_user_prompt(
             state_snapshot=state_snapshot,
             scenario=scenario,
@@ -36,6 +41,7 @@ class SwarmAgent:
                 user=user_prompt,
                 temperature=0.85,
                 max_tokens=900,
+                model=model,
             )
             return self._verdict_from_response(data, raw=str(data))
         except Exception as e:
