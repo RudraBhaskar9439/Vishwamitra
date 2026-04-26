@@ -1,14 +1,3 @@
----
-title: Vishwamitra — Disagreement-Mapping for Educational Commons
-emoji: 🪔
-colorFrom: yellow
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: true
-license: mit
----
-
 <!-- ================================================================== -->
 <!--                              HERO                                   -->
 <!-- ================================================================== -->
@@ -196,8 +185,8 @@ flowchart LR
     Swarm["12-persona swarm<br/>(teacher, mechanism designer)"] -->|"~80 deliberations"| Data["train.jsonl<br/>val.jsonl"]
     Data -->|"Unsloth + TRL SFT"| Student["Llama-3.2-1B<br/>+ LoRA adapter<br/>(distilled student)"]
     Student -->|"20 episodes × 40 steps"| Eval["DropoutCommonsEnv<br/>reward eval"]
-    Random[Random baseline] --> Eval
-    Zero[Zero-action<br/>(Nash collapse) baseline] --> Eval
+    Random["Random baseline"] --> Eval
+    Zero["Zero-action<br/>(Nash collapse) baseline"] --> Eval
 
     style Swarm fill:#7c2d12,stroke:#fbbf24,color:#fef3c7
     style Student fill:#1e3a8a,stroke:#60a5fa,color:#dbeafe
