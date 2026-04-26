@@ -13,12 +13,13 @@ A multi-agent OpenEnv simulation of educational systems collapse, framed as a **
 [![OpenEnv](https://img.shields.io/badge/Built_on-Meta_OpenEnv-0668E1?style=for-the-badge&logo=meta&logoColor=white)](https://github.com/facebookresearch/openenv)
 [![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)](https://pytorch.org)
 [![Hugging Face](https://img.shields.io/badge/🤗_Spaces-Live_Demo-FFD21E?style=for-the-badge)](https://huggingface.co/spaces/rudra9439/vidya-meta-rl)
-[![Open in Kaggle](https://img.shields.io/badge/Open_in-Kaggle-20BEFF?style=for-the-badge&logo=kaggle&logoColor=white)](https://www.kaggle.com/code)
+[![Open in Kaggle](https://img.shields.io/badge/Open_in-Kaggle-20BEFF?style=for-the-badge&logo=kaggle&logoColor=white)]([https://www.kaggle.com/code](https://www.kaggle.com/code/rudrabhaskar/vishwamitra-scaler))
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
 [![Hackathon](https://img.shields.io/badge/Meta_·_PyTorch_Hackathon-Round_2-blueviolet?style=for-the-badge)](https://www.scaler.com/school-of-technology/meta-pytorch-hackathon)
 
 **[🚀 Try the env](https://huggingface.co/spaces/rudra9439/vidya-meta-rl)** &nbsp;·&nbsp;
-**[▶️  Walkthrough](#-watch-the-walkthrough)** &nbsp;·&nbsp;
+**[▶️  Walkthrough](https://youtu.be/77tft956NgI)** &nbsp;·&nbsp;
+**[Blog](https://huggingface.co/spaces/rudra9439/vidya-meta-rl/blob/main/Blog.md)** &nbsp;·&nbsp;
 **[🧠 Architecture](#️-architecture)** &nbsp;·&nbsp;
 **[🎲 Game-theoretic foundations](#-game-theoretic-foundations)** &nbsp;·&nbsp;
 **[📊 Results](#-results)** &nbsp;·&nbsp;
@@ -496,11 +497,11 @@ Real RL on an LLM agent in this env would take 4 × H100 × multiple days — ou
 
 > *Replace with your unlisted YouTube URL once recorded.*
 
-[![Watch the demo](https://img.shields.io/badge/▶️_YouTube-Walkthrough-FF0000?style=for-the-badge&logo=youtube)](#)
+[![Watch the demo](https://img.shields.io/badge/▶️_[YouTube-Walkthrough-FF0000?style=for-the-badge&logo=youtube](https://youtu.be/77tft956NgI))](#)
 
 The video covers:
 
-1. **The Sundarpur scenario** — a mid-sized district hit by a 35% mid-year budget cut (the kind of crisis a District Education Officer faces every Monday somewhere).
+1. **The Rajasthan scenario** — a mid-sized district hit by a 35% mid-year budget cut (the kind of crisis a District Education Officer faces every Monday somewhere).
 2. **The swarm-of-swarms running live** — 12 personas deliberating, the resonance/Schelling-point map appearing, the dissonance flag firing on `attendance_mandate`.
 3. **The trained 1-B student** replicating the swarm's mechanism-design verdict in 0.3 seconds.
 4. **Reward curves** — distilled student vs. Nash-collapse baseline on the env.
