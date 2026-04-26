@@ -238,8 +238,18 @@ class LLMClient:
         try:
             resp = await self.client.chat.completions.create(**kwargs)
         except Exception as e:
-            # If response_format is the issue, retry without it once.
-            if json_mode and "response_format" in str(e):
+            # If json_mode caused trouble — provider doesn't support
+            # response_format OR the model emitted JSON that the provider's
+            # strict validator rejected (Groq raises `json_validate_failed`
+            # for malformed nested objects) — retry without json_mode and
+            # let our own _extract_json + json.loads handle the result.
+            err = str(e).lower()
+            json_problem = json_mode and (
+                "response_format" in err
+                or "json_validate_failed" in err
+                or "failed to generate json" in err
+            )
+            if json_problem:
                 kwargs.pop("response_format", None)
                 resp = await self.client.chat.completions.create(**kwargs)
             else:

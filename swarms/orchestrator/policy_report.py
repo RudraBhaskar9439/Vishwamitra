@@ -79,38 +79,46 @@ SYSTEM_PROMPT_PART_1 = """Produce part 1 of an Educational Policy Brief from
 a Vishwamitra swarm deliberation. Output a SINGLE FLAT JSON object — every
 listed key is top-level. No nested wrappers. No code fences.
 
+JSON TYPE LEGEND (FOLLOW EXACTLY):
+  string  → "...":  "single quoted text. Multi-paragraph content goes inside
+                    ONE string with \\n\\n between paragraphs."
+  array   → "...":  ["item one", "item two", "item three"]
+  object  → "...":  {"sub_key": "value", ...}
+NEVER write `{ "first sentence", "second sentence" }` — that is invalid JSON.
+
 Required FLAT top-level keys:
 
-  title              "Educational Policy Brief: <Specific Crisis>" (≤14 words)
-  subtitle           1 evocative line.
-  executive_summary  4-5 sentences: crisis, deliberation, recommendation,
-                     decisions still belonging to humans.
-  what_is            4-5 sentences on educational policy in THIS crisis.
+  title              string. "Educational Policy Brief: <Specific Crisis>" (≤14 words)
+  subtitle           string. 1 evocative line.
+  executive_summary  string. 4-5 sentences: crisis, deliberation,
+                     recommendation, decisions still belonging to humans.
+  what_is            string. 4-5 sentences on educational policy in THIS crisis.
 
-  operational_context     2 paragraphs, read like an incident report,
-                          citing state numbers verbatim.
-  state_diagnostic        list of 5-7 objects, each:
-                          {"metric": <field name>,
-                           "value":  <formatted value>,
-                           "interpretation": <1 sentence>}
+  operational_context     string. 2 paragraphs separated by \\n\\n; reads
+                          like an incident report, citing state numbers
+                          verbatim. STRING — NOT object, NOT array.
+  state_diagnostic        array of 5-7 objects, each:
+                          {"metric": "<field name>",
+                           "value":  "<formatted value>",
+                           "interpretation": "<1 sentence>"}
                           Order by severity.
-  root_cause_hypothesis   2 paragraphs on why the system arrived here.
-                          Link upstream causes to downstream symptoms.
-  stakes_of_inaction      2 paragraphs on 90/180-day cascade if no action.
-                          Reference cascade dynamics (teacher exits →
-                          class size → burnout).
-  success_criteria        4-6 measurable bullets, each naming a metric +
+  root_cause_hypothesis   string. 2 paragraphs separated by \\n\\n. Link
+                          upstream causes to downstream symptoms. STRING.
+  stakes_of_inaction      string. 2 paragraphs separated by \\n\\n. Reference
+                          cascade dynamics (teacher exits → class size →
+                          burnout). STRING.
+  success_criteria        array of 4-6 strings, each naming a metric +
                           target movement.
 
-  stage_1_description     2-3 sentences citing 2 state numbers.
-  stage_1_bullets         4-5 bullets with numbers.
-  stage_2_description     2-3 sentences on agenda dynamics.
-  stage_2_bullets         4-5 bullets citing personas by name.
-  stage_2_influencers     1 sentence.
-  stage_3_description     2-3 sentences on intervention formulation.
-  stage_3_bullets         5-6 bullets — EACH one intervention with its
-                          intensity number + persona-grounded rationale.
-  stage_3_contributors    1 sentence naming swarms + 1-2 key personas.
+  stage_1_description     string. 2-3 sentences citing 2 state numbers.
+  stage_1_bullets         array of 4-5 strings, each with numbers.
+  stage_2_description     string. 2-3 sentences on agenda dynamics.
+  stage_2_bullets         array of 4-5 strings citing personas by name.
+  stage_2_influencers     string. 1 sentence.
+  stage_3_description     string. 2-3 sentences on intervention formulation.
+  stage_3_bullets         array of 5-6 strings — EACH one intervention with
+                          its intensity number + persona-grounded rationale.
+  stage_3_contributors    string. 1 sentence naming swarms + 1-2 personas.
 
 """ + _STYLE_GUARDRAILS
 
@@ -124,32 +132,41 @@ stages 1-3) was authored elsewhere — stay consistent with its scenario,
 personas, and numbers. Output a SINGLE FLAT JSON object — every key is
 top-level. No nested wrappers. No code fences.
 
+JSON TYPE LEGEND (FOLLOW EXACTLY):
+  string  → "...":  "text"
+  array   → "...":  ["a", "b"]
+  object  → "...":  {"sub_key": "value"}
+NEVER write `{ "bare string", "another" }` — invalid JSON.
+
 Required FLAT top-level keys:
 
-  stage_4_description     2-3 sentences on adoption tensions.
-  stage_4_bullets         4-5 bullets pairing recommendations with persona
-                          tensions.
-  stage_5_description     2-3 sentences on implementation challenges.
-  stage_5_bullets         4-5 bullets on capacity / timeline / sequencing.
-  stage_5_challenges      1 sentence on primary implementation risks.
-  stage_6_description     2-3 sentences on outcome measurement.
-  stage_6_bullets         3-4 bullets — each = state-vector metric + target
-                          direction + timeline.
+  stage_4_description     string. 2-3 sentences on adoption tensions.
+  stage_4_bullets         array of 4-5 strings pairing recommendations with
+                          persona tensions.
+  stage_5_description     string. 2-3 sentences on implementation challenges.
+  stage_5_bullets         array of 4-5 strings on capacity / timeline /
+                          sequencing.
+  stage_5_challenges      string. 1 sentence on primary implementation risks.
+  stage_6_description     string. 2-3 sentences on outcome measurement.
+  stage_6_bullets         array of 3-4 strings — each = state-vector metric
+                          + target direction + timeline.
 
-  roadmap                 EXACTLY 4 phase objects:
+  roadmap                 array of EXACTLY 4 phase objects:
                           {"phase_name": "Phase N: <Verb-led name>",
-                           "window":     "0-30 days" | "30-90 days" | etc.,
-                           "objective":  <1 sentence>,
-                           "actions":    [3-4 concrete actions],
-                           "owners":     [2-3 named owner roles],
-                           "milestones": [2-3 quantified milestones],
-                           "dependencies": [1-2 dependencies]}
+                           "window":     "0-30 days",
+                           "objective":  "<1 sentence>",
+                           "actions":    ["a", "b", "c"],
+                           "owners":     ["role1", "role2"],
+                           "milestones": ["m1", "m2"],
+                           "dependencies": ["d1"]}
                           Phases: (1) stabilise 0-30d, (2) rollout 30-90d,
                           (3) course-correct 3-6mo, (4) evaluate 6-12mo.
 
-  risk_register           4-5 risk objects:
-                          {"risk": str, "likelihood": "low"|"medium"|"high",
-                           "impact": "low"|"medium"|"high", "mitigation": str}
+  risk_register           array of 4-5 risk objects:
+                          {"risk": "<text>",
+                           "likelihood": "low" | "medium" | "high",
+                           "impact":     "low" | "medium" | "high",
+                           "mitigation": "<text>"}
                           Cover political, fiscal, capacity, equity,
                           behavioural cascade. At least one per dissonance
                           flag.
@@ -166,9 +183,16 @@ roadmap, risk register) were authored elsewhere — stay consistent with
 their scenario, personas, and numbers. Output a SINGLE FLAT JSON object.
 No nested wrappers. No code fences.
 
+JSON TYPE LEGEND (FOLLOW EXACTLY):
+  string  → "...":  "text"
+  array   → "...":  ["a", "b"]
+  object  → "...":  {"sub_key": "value"}
+NEVER write `{ "bare string", "another" }` — invalid JSON.
+
 Required FLAT top-level keys:
 
-  stakeholders            EXACTLY 6 objects {"name": str, "role": str}.
+  stakeholders            array of EXACTLY 6 objects:
+                          {"name": "<text>", "role": "<text>"}.
                           First 4: Student Body, Teaching Staff, School
                           Administration, Policymakers. The role field
                           summarises that swarm's contribution in THIS
@@ -176,23 +200,26 @@ Required FLAT top-level keys:
                           2 scenario-relevant extras (Parents/Community,
                           District Auditor, etc.).
 
-  persona_feedback        6-8 objects, ≥1 per role:
-                          {"persona_name": str, "role": str,
-                           "key_concern":  <1 sentence>,
-                           "direct_quote": <2-3 sentences in their voice>,
-                           "actionable_request": <1 sentence>}
+  persona_feedback        array of 6-8 objects, ≥1 per role:
+                          {"persona_name":      "<text>",
+                           "role":              "<text>",
+                           "key_concern":       "<1 sentence>",
+                           "direct_quote":      "<2-3 sentences in their voice>",
+                           "actionable_request":"<1 sentence>"}
 
-  areas_of_agreement      3-5 bullets where lenses converged. Cite
+  areas_of_agreement      array of 3-5 strings where lenses converged. Cite
                           resonance scores when relevant.
-  areas_of_contention     3-5 bullets where lenses diverged. One per
-                          dissonance flag, naming flagged intervention
+  areas_of_contention     array of 3-5 strings where lenses diverged. One
+                          per dissonance flag, naming flagged intervention
                           and the underlying persona tension.
 
-  iterative_nature        3-4 bullets on what feeds back into next cycle.
-  challenges              4-5 scenario-specific challenges.
-  strategies              4-5 actionable bullets.
-  takeaway                2 paragraphs: synthesis, then which calls
-                          require human judgement.
+  iterative_nature        array of 3-4 strings on what feeds back into next
+                          cycle.
+  challenges              array of 4-5 scenario-specific challenge strings.
+  strategies              array of 4-5 actionable strings.
+  takeaway                string. 2 paragraphs separated by \\n\\n:
+                          synthesis, then which calls require human
+                          judgement.
 
 """ + _STYLE_GUARDRAILS
 
