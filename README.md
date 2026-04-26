@@ -4,7 +4,7 @@
 
 <div align="center">
 
-# 🪔  Vishwamitra
+# Vishwamitra
 
 ### *Most policy AI tries to find the optimum.*<br/>*Vishwamitra maps the **Nash equilibrium** that the optimum has to break.*
 
